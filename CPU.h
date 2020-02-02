@@ -24,10 +24,14 @@ public:
 
 private:
     void cycle();
-    bool draw();
-    void setKeys();
+    void draw();
+    void init();
+    void input();
 
-    
+    sf::RenderWindow win;
+    sf::Clock clock;
+    sf::RectangleShape pixel;
+
 
 
     byte memory[4096];

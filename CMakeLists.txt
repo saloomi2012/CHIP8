@@ -4,7 +4,7 @@ project(CHIP8)
 set(CMAKE_CXX_STANDARD 14)
 
 set(SFML_INCLUDE_DIR "/usr/local/include")
-set(SFML_LIBRARY_DIR "/usr/local/lib")
+set(SFML_LIBRARY_DIR "/usr/local/lib/lib")
 
 
 link_directories(SFML_LIBRARY_DIR)
