@@ -5,6 +5,7 @@
 #include "CPU.h"
 
 void CPU::init() {
+
     srand(time(NULL));
     pc = 0x200;
     opcode = 0;
@@ -17,6 +18,14 @@ void CPU::init() {
     for(int i = 0; i < 16; i++) {
         V[i] = 0;
         key[i] = 0;
+    }
+
+    for(int i = 0; i < 64; i++) {
+        for(int j = 0; j < 32; j++) {
+            screen[i][j].setPosition(i*10, j*10);
+            screen[i][j].setSize({10, 10});
+            screen[i][j].setFillColor(sf::Color::Black);
+        }
     }
 
 
@@ -56,12 +65,21 @@ void CPU::init() {
 void CPU::cycle() {
 
     opcode = memory[pc] << 8u | memory[pc + 1];
-
+    byte x   = (opcode >> 8) & 0x000F; // the lower 4 bits of the high byte
+    byte y   = (opcode >> 4) & 0x000F; // the upper 4 bits of the low byte
+    byte n   = opcode & 0x000F; // the lowest 4 bits
+    byte kk  = opcode & 0x00FF; // the lowest 8 bits
+    doubleByte nnn = opcode & 0x0FFF; // the lowest 12 bits
 
     switch (opcode & 0xF000) {
         case 0x0000: {
-            switch (opcode & 0x00FF) {
+            switch (kk) {
                 case 0x00E0: // 0x00E0: Clears the screen
+                    for(int i = 0; i < 64; i++) {
+                        for(int j = 0; j < 32; j++) {
+                            screen[i][j].setFillColor(sf::Color::Black);
+                        }
+                    }
                     drawFlag = true;
                     pc += 2;
                     break;
@@ -69,8 +87,6 @@ void CPU::cycle() {
                 case 0x00EE: // 0x00EE: Returns from subroutine
                     pc = stack[stackPointer];
                     stackPointer--;
-
-
                     break;
 
                 default:
@@ -83,117 +99,78 @@ void CPU::cycle() {
 
 
         case 0x1000:
-            pc = opcode & 0x0FFF;
+            pc = nnn;
             break;
         case 0x2000:
-            stackPointer++;
-            stack[stackPointer] = pc;
-            pc = opcode & 0x0FFF;
+            stack[stackPointer++] = pc+2;
+            pc = nnn;
             break;
         case 0x3000:
-            if(V[(opcode & 0x0F00) >> 8] == (opcode & 0x00FF))
-                pc+=4;
-            else
-                pc+=2;
+            pc += (V[x] == kk) ? 4 : 2;
             break;
         case 0x4000:
-            if(V[(opcode & 0x0F00) >> 8] != (opcode & 0x00FF))
-                pc+=4;
-            else
-                pc+=2;
+            pc += (V[x] != kk) ? 4 : 2;
             break;
         case 0x5000:
-            if(V[(opcode & 0x0F00) >> 8u] == V[(opcode & 0x00F0) >> 4])
-                pc += 4;
-            else
-                pc+=2;
+            pc += (V[x] == V[y]) ? 4 : 2;
             break;
         case 0x6000:
-            V[(opcode & 0x0F00) >> 8u] = (opcode & 0x00FF);
+            V[x] = kk;
             pc += 2;
             break;
         case 0x7000:
-            V[(opcode & 0x0F00) >> 8] += opcode & 0x00FF;
+            V[x] += kk;
             pc += 2;
             break;
         case 0x8000:
             switch(opcode & 0x000F) {
                 case 0x0000:
-                    V[(opcode & 0x0F00) >> 8] = V[(opcode & 0x00F0) >> 4];
-                    pc += 2;
+                    V[x] = V[y];
                     break;
                 case 0x0001:
-                    V[(opcode & 0x0F00) >> 8] = V[(opcode & 0x0F00) >> 8] | V[(opcode & 0x00F0) >> 4];
-                    pc += 2;
+                    V[x] = V[x] | V[y];
                     break;
                 case 0x0002:
-                    V[(opcode & 0x0F00) >> 8] = V[(opcode & 0x0F00) >> 8] & V[(opcode & 0x00F0) >> 4];
-                    pc += 2;
+                    V[x] = V[x] & V[y];
                     break;
                 case 0x0003:
-                    V[(opcode & 0x0F00) >> 8] = V[(opcode & 0x0F00) >> 8] ^ V[(opcode & 0x00F0) >> 4];
-                    pc += 2;
+                    V[x] = V[x] ^ V[y];
                     break;
                 case 0x0004: {
-                    doubleByte sum = V[(opcode & 0x0F00) >> 8] + V[(opcode & 0x00F0) >> 4];
-                    if (sum > 255) {
-                        V[0xF] = 1;
-                    } else {
-                        V[0xF] = 0;
-                    }
-                    V[(opcode & 0x0F00) >> 8] += V[(opcode & 0x00F0) >> 4];
-                    pc += 2;
-
+                    V[0xF] = ((int) V[x] + (int) V[y]) > 255 ? 1 : 0;
+                    V[x] = V[x] + V[y];
                     break;
                 }
 
                 case 0x0005:
-                    if(V[(opcode & 0x0F00) >> 8] > V[(opcode & 0x00F0) >> 4]) {
-                        V[0xF] = 1;
-                    } else {
-                        V[0xF] = 0;
-                    }
-                    V[(opcode & 0x0F00) >> 8] -= V[(opcode & 0x00F0) >> 4];
-                    pc += 2;
+                    V[0xF] = (V[x] > V[y]) ? 1 : 0;
+                    V[x] = V[x] - V[y];
                     break;
                 case 0x0006:
-                    if(V[(opcode & 0x0F00) >> 8u] & 1u) {
-                        V[0xF] = 1;
-                    }
-                    else {
-                        V[0xF] = 0;
-                    }
-                    V[(opcode & 0x0F00) >> 8u] /= 2;
-                    pc+=2;
+                    V[0xF] = V[x] & 0x1;
+                    V[x] = (V[x] >> 1);
                     break;
                 case 0x0007:
-                    if(V[(opcode & 0x0F00) >> 8u] < V[(opcode & 0x00F0) >> 4]) {
-                        V[0xF] = 1;
-                    } else {
-                        V[0xF] = 0;
-                    }
-                    V[(opcode & 0x00F0) >> 4u] -= V[(opcode & 0x0F00) >> 8];
-                    pc+=2;
+                    V[0xF] = (V[y] > V[x]) ? 1 : 0;
+                    V[x] = V[y] - V[x];
                     break;
                 case 0x000E:
-                    if((V[(opcode & 0x0F00) >> 8u] >> 4) & 1u) {
-                        V[0xF] = 1;
-                    } else {
-                        V[0xF] = 0;
-                    }
-                    V[(opcode & 0x0F00) >> 8u] *= 2;
-                    pc+=2;
+                    V[0xF] = (V[x] >> 7) & 0x1;
+                    V[x] = (V[x] << 1);
                     break;
             }
-
+            pc+=2;
             break;
 
 
         case 0x9000:
-            if(V[(opcode & 0x0F00) >> 8] != V[(opcode & 0x00F0) >> 4]) {
-                pc += 4;
-            } else {
-                pc +=2;
+            switch (n) {
+                case 0x0:
+                    pc += (V[x] != V[y]) ? 4 : 2;
+                    break;
+                default:
+
+                    break;
             }
             break;
 
@@ -201,97 +178,137 @@ void CPU::cycle() {
         // Some opcodes //
 
         case 0xA000: // ANNN: Sets I to the address NNN
-            I = opcode & 0x0FFF;
+            I = nnn;
             pc += 2;
             break;
         case 0xB000:
-            pc = (opcode & 0x0FFF) + V[0];
+            pc = nnn + V[0];
             break;
         case 0xC000: {
             byte num = rand() % 256;
-            V[(opcode & 0x0F00) >> 8] = num & (opcode & 0x00FF);
+            V[x] = num & kk;
             pc+=2;
             break;
         }
-        case 0xD000:
-            printf("Unimplemented opcode: 0x%X\n", opcode);
-            break;
-        case 0xE000:
-            switch(opcode & 0x00FF) {
-                case 0x009E:
-                    if(key[V[(opcode & 0x0F00) >> 8]] != 0) {
-                        pc+=4;
-                    } else {
-                        pc+=2;
+        case 0xD000: {
+            V[0xF] = 0;
+            int pixelBytes = n;
+            for(int i = 0; i < pixelBytes; i++) {
+                int xcor = V[x];
+                int ycor = V[y];
+
+                byte b = memory[I+i];
+                int bits[8];
+                bits[0] = (b & 0b10000000) >> 7;
+                bits[1] = (b & 0b01000000) >> 6;
+                bits[2] = (b & 0b00100000) >> 5;
+                bits[3] = (b & 0b00010000) >> 4;
+                bits[4] = (b & 0b00001000) >> 3;
+                bits[5] = (b & 0b00000100) >> 2;
+                bits[6] = (b & 0b00000010) >> 1;
+                bits[7] = b & 0b00000001;
+                for(int j = 0; j < 8; j++) {
+                    while(xcor+j > 63) {
+                        xcor -= 64;
                     }
+                    while(ycor+i > 31) {
+                        ycor -= 32;
+                    }
+                    if(screen[xcor+j][ycor+i].getFillColor() == sf::Color::White && bits[j] == 1) {
+                        V[0xF] = 1;
+                        screen[xcor+j][ycor+i].setFillColor(sf::Color::Black);
+                    } else if (screen[xcor+j][ycor+i].getFillColor() == sf::Color::Black && bits[j] == 1){
+                        screen[xcor+j][ycor+i].setFillColor(sf::Color::White);
+                    }
+                }
+            }
+            drawFlag = true;
+            pc += 2;
+            break;
+        }
+        case 0xE000:
+            switch(kk) {
+                case 0x009E:
+                    pc += (key[V[x]]) ? 4 : 2;
                     break;
                 case 0x00A1:
-                    if(key[V[(opcode & 0x0F00) >> 8]] == 0) {
-                        pc+=4;
-                    } else {
-                        pc+=2;
-                    }
+                    pc += (!key[V[x]]) ? 4 : 2;
                     break;
             }
             break;
-        case 0xF000:
-            switch(opcode&0x00FF) {
+        case 0xF000: {
+            switch (kk) {
                 case 0x0007:
-                    V[(opcode & 0x0F00) >> 8] = delayTimer;
-                    pc+=2;
+                    V[x] = delayTimer;
+                    pc += 2;
                     break;
-                case 0x000A:
-                    printf("Unimplemented opcode: 0x%X\n", opcode);
+                case 0x000A: {
+                    bool change = false;
+                    while (!change) {
+                        input();
+                        for (int i = 0; i < 16; i++) {
+                            if (key[i]) {
+                                V[x] = key[i];
+                                change = true;
+                            }
+                        }
+                    }
+                    pc += 2;
                     break;
+                }
                 case 0x0015:
-                     delayTimer = V[(opcode & 0x0F00) >> 8];
-                     pc +=2;
-                     break;
+                    delayTimer = V[x];
+                    pc += 2;
+                    break;
                 case 0x0018:
-                    soundTimer = V[(opcode & 0x0F00) >> 8];
-                    pc +=2;
+                    soundTimer = V[x];
+                    pc += 2;
                     break;
                 case 0x001E:
-                    I += V[(opcode & 0x0F00) >> 8];
-                    pc+=2;
+                    V[0xF] = (I + V[x] > 0xfff) ? 1 : 0;
+                    I = I + V[x];
+                    pc += 2;
                     break;
                 case 0x0029:
-                    printf("Unimplemented opcode: 0x%X\n", opcode);
+                    I = 5 * V[(opcode & 0x0F00) >> 8];
+                    pc += 2;
                     break;
                 case 0x0033:
-                    memory[I]     = V[(opcode & 0x0F00) >> 8] / 100;
-                    memory[I + 1] = (V[(opcode & 0x0F00) >> 8] / 10) % 10;
-                    memory[I + 2] = (V[(opcode & 0x0F00) >> 8] % 100) % 10;
+                    memory[I]   = (V[x] % 1000) / 100; // hundred's digit
+                    memory[I+1] = (V[x] % 100) / 10;   // ten's digit
+                    memory[I+2] = (V[x] % 10);
                     pc += 2;
                     break;
                 case 0x0055:
-                    for(int i = 0; i < 16; i++) {
+                    for (int i = 0; i < x; i++) {
                         memory[I + i] = V[i];
                     }
                     pc += 2;
                     break;
                 case 0x0065:
-                    for(int i = 0; i < 16; i++) {
+                    for (int i = 0; i < x; i++) {
                         V[i] = memory[I + i];
                     }
                     pc += 2;
                     break;
 
 
-
             }
             break;
-
-
-
-
-
-
-
-
+        }
 
         default:
             printf("Unknown opcode: 0x%X\n", opcode);
+
+
+
+
+
+
+
+
+
+
     }
 
     //timer shit
@@ -304,11 +321,21 @@ CPU::CPU(std::string game) {
 
     init();
 
+    sf::Clock clock;
+    win.setFramerateLimit(100);
 
     while (true) {
+        if(clock.getElapsedTime().asMilliseconds() > 16) {
+            if(delayTimer > 0) delayTimer--;
+            if(soundTimer > 0) soundTimer--;
+            clock.restart();
+        }
         cycle();
         if (drawFlag)
             draw();
+        if(soundTimer > 0) {
+            printf("beep!\n");
+        }
         input();
 
     }
@@ -441,11 +468,14 @@ void CPU::input() {
 
 void CPU::draw() {
     printf("Draw opcode: 0x%X\n", opcode);
-    if(opcode == 0x00E0) {
-        win.clear(sf::Color::Black);
-
+    for(int i = 0; i < 64; i++) {
+        for(int j = 0; j < 32; j++) {
+             win.draw(screen[i][j]);
+        }
     }
 
+
+    win.display();
     drawFlag = false;
 
 }

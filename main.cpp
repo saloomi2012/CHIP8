@@ -3,7 +3,7 @@
 
 int main(int, char const**)
 {
-    CPU cpu("15PUZZLE");
+    CPU cpu("BRIX");
 
     return EXIT_SUCCESS;
 }

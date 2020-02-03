@@ -37,7 +37,7 @@ private:
 
     byte memory[4096];
     byte V[16];
-    byte screen[64*32];
+    sf::RectangleShape screen[64][32];
     byte delayTimer;
     byte soundTimer;
     byte key[16];
