@@ -8,6 +8,7 @@
 #include <iostream>
 #include <cstdio>
 #include <cstdlib>
+#include <ctime>
 #include <string>
 
 #include <SFML/Audio.hpp>

@@ -5,12 +5,21 @@
 #include "CPU.h"
 
 void CPU::init() {
-
-
+    srand(time(NULL));
     pc = 0x200;
     opcode = 0;
     I = 0;
     stackPointer = 0;
+    delayTimer = 0;
+    soundTimer = 0;
+    drawFlag = false;
+
+    for(int i = 0; i < 16; i++) {
+        V[i] = 0;
+        key[i] = 0;
+    }
+
+
 
     unsigned long fileLen;
     char *buffer;
@@ -50,6 +59,29 @@ void CPU::cycle() {
 
 
     switch (opcode & 0xF000) {
+        case 0x0000: {
+            switch (opcode & 0x00FF) {
+                case 0x00E0: // 0x00E0: Clears the screen
+                    drawFlag = true;
+                    pc += 2;
+                    break;
+
+                case 0x00EE: // 0x00EE: Returns from subroutine
+                    pc = stack[stackPointer];
+                    stackPointer--;
+
+
+                    break;
+
+                default:
+                    printf("Unknown opcode [0x0000]: 0x%X\n", opcode);
+                    pc += 2;
+                    break;
+            }
+            break;
+        }
+
+
         case 0x1000:
             pc = opcode & 0x0FFF;
             break;
@@ -175,32 +207,87 @@ void CPU::cycle() {
         case 0xB000:
             pc = (opcode & 0x0FFF) + V[0];
             break;
-        case 0xC000:
-            //generates a random number from 0 to 255, which is then ANDed with the value kk. The results are stored in Vx
+        case 0xC000: {
+            byte num = rand() % 256;
+            V[(opcode & 0x0F00) >> 8] = num & (opcode & 0x00FF);
+            pc+=2;
             break;
-
-
-
-
-
-
-        case 0x0000:
-            switch (opcode & 0x000F) {
-                case 0x0000: // 0x00E0: Clears the screen
-                    drawFlag = true;
+        }
+        case 0xD000:
+            printf("Unimplemented opcode: 0x%X\n", opcode);
+            break;
+        case 0xE000:
+            switch(opcode & 0x00FF) {
+                case 0x009E:
+                    if(key[V[(opcode & 0x0F00) >> 8]] != 0) {
+                        pc+=4;
+                    } else {
+                        pc+=2;
+                    }
+                    break;
+                case 0x00A1:
+                    if(key[V[(opcode & 0x0F00) >> 8]] == 0) {
+                        pc+=4;
+                    } else {
+                        pc+=2;
+                    }
+                    break;
+            }
+            break;
+        case 0xF000:
+            switch(opcode&0x00FF) {
+                case 0x0007:
+                    V[(opcode & 0x0F00) >> 8] = delayTimer;
+                    pc+=2;
+                    break;
+                case 0x000A:
+                    printf("Unimplemented opcode: 0x%X\n", opcode);
+                    break;
+                case 0x0015:
+                     delayTimer = V[(opcode & 0x0F00) >> 8];
+                     pc +=2;
+                     break;
+                case 0x0018:
+                    soundTimer = V[(opcode & 0x0F00) >> 8];
+                    pc +=2;
+                    break;
+                case 0x001E:
+                    I += V[(opcode & 0x0F00) >> 8];
+                    pc+=2;
+                    break;
+                case 0x0029:
+                    printf("Unimplemented opcode: 0x%X\n", opcode);
+                    break;
+                case 0x0033:
+                    memory[I]     = V[(opcode & 0x0F00) >> 8] / 100;
+                    memory[I + 1] = (V[(opcode & 0x0F00) >> 8] / 10) % 10;
+                    memory[I + 2] = (V[(opcode & 0x0F00) >> 8] % 100) % 10;
+                    pc += 2;
+                    break;
+                case 0x0055:
+                    for(int i = 0; i < 16; i++) {
+                        memory[I + i] = V[i];
+                    }
+                    pc += 2;
+                    break;
+                case 0x0065:
+                    for(int i = 0; i < 16; i++) {
+                        V[i] = memory[I + i];
+                    }
                     pc += 2;
                     break;
 
-                case 0x000E: // 0x00EE: Returns from subroutine
-                    pc = stack[stackPointer];
-                    stackPointer--;
 
-                    break;
 
-                default:
-                    printf("Unknown opcode [0x0000]: 0x%X\n", opcode);
             }
             break;
+
+
+
+
+
+
+
 
 
         default:
@@ -233,12 +320,132 @@ void CPU::input() {
 
     sf::Event e;
     while (win.pollEvent(e)) {
-        if (e.type == sf::Event::Closed)
-            exit(0);
+        switch(e.type) {
+            case sf::Event::KeyPressed:
+                switch(e.key.code) {
+                    case sf::Keyboard::Num1:
+                        key[0x1] = 1;
+                        break;
+                    case sf::Keyboard::Num2:
+                        key[0x2] = 1;
+                        break;
+                    case sf::Keyboard::Num3:
+                        key[0x3] = 1;
+                        break;
+                    case sf::Keyboard::Num4:
+                        key[0xC] = 1;
+                        break;
+                    case sf::Keyboard::Q:
+                        key[0x4] = 1;
+                        break;
+                    case sf::Keyboard::W:
+                        key[0x5] = 1;
+                        break;
+                    case sf::Keyboard::E:
+                        key[0x6] = 1;
+                        break;
+                    case sf::Keyboard::R:
+                        key[0xD] = 1;
+                        break;
+                    case sf::Keyboard::A:
+                        key[0x7] = 1;
+                        break;
+                    case sf::Keyboard::S:
+                        key[0x8] = 1;
+                        break;
+                    case sf::Keyboard::D:
+                        key[0x9] = 1;
+                        break;
+                    case sf::Keyboard::F:
+                        key[0xE] = 1;
+                        break;
+                    case sf::Keyboard::Z:
+                        key[0xA] = 1;
+                        break;
+                    case sf::Keyboard::X:
+                        key[0x0] = 1;
+                        break;
+                    case sf::Keyboard::C:
+                        key[0xB] = 1;
+                        break;
+                    case sf::Keyboard::V:
+                        key[0xF] = 1;
+                        break;
+                    default:
+                        break;
+                }
+                break;
+            case sf::Event::KeyReleased:
+                switch(e.key.code) {
+                    case sf::Keyboard::Num1:
+                        key[0x1] = 0;
+                        break;
+                    case sf::Keyboard::Num2:
+                        key[0x2] = 0;
+                        break;
+                    case sf::Keyboard::Num3:
+                        key[0x3] = 0;
+                        break;
+                    case sf::Keyboard::Num4:
+                        key[0xC] = 0;
+                        break;
+                    case sf::Keyboard::Q:
+                        key[0x4] = 0;
+                        break;
+                    case sf::Keyboard::W:
+                        key[0x5] = 0;
+                        break;
+                    case sf::Keyboard::E:
+                        key[0x6] = 0;
+                        break;
+                    case sf::Keyboard::R:
+                        key[0xD] = 0;
+                        break;
+                    case sf::Keyboard::A:
+                        key[0x7] = 0;
+                        break;
+                    case sf::Keyboard::S:
+                        key[0x8] = 0;
+                        break;
+                    case sf::Keyboard::D:
+                        key[0x9] = 0;
+                        break;
+                    case sf::Keyboard::F:
+                        key[0xE] = 0;
+                        break;
+                    case sf::Keyboard::Z:
+                        key[0xA] = 0;
+                        break;
+                    case sf::Keyboard::X:
+                        key[0x0] = 0;
+                        break;
+                    case sf::Keyboard::C:
+                        key[0xB] = 0;
+                        break;
+                    case sf::Keyboard::V:
+                        key[0xF] = 0;
+                        break;
+                    default:
+                        break;
+                }
+                break;
+            case sf::Event::Closed:
+                exit(0);
+            default:
+                break;
+
+        }
     }
 
 }
 
 void CPU::draw() {
+    printf("Draw opcode: 0x%X\n", opcode);
+    if(opcode == 0x00E0) {
+        win.clear(sf::Color::Black);
+
+    }
+
+    drawFlag = false;
 
 }
